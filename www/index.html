@@ -5,16 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solar Estimater</title>
 <style>
-:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#f1f5f9;--mut:#94a3b8;--sun:#fbbf24;--blue:#38bdf8}
+:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#f1f5f9;--mut:#94a3b8;--sun:#fbbf24;--blue:#38bdf8;--green:#22c55e}
 *{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,sans-serif}
 body{background:var(--bg);color:var(--txt);padding-bottom:80px}
 .wrap{max-width:560px;margin:auto;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,24px))}
 h1{font-size:22px;margin-bottom:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
-label{font-size:12px;color:var(--mut);display:block;margin-bottom:4px}
-input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-size:16px}
+label{font-size:12px;color:var(--mut);display:block;margin:8px 0 4px}
+input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-size:16px}
 .row{display:flex;gap:8px}.row>div{flex:1}
 button{border:0;border-radius:10px;padding:10px 14px;background:var(--sun);color:#000;font-weight:600;font-size:15px}
+a.btn{display:inline-block;text-decoration:none;border-radius:10px;padding:8px 12px;font-weight:600;font-size:14px;background:var(--bg);color:var(--txt);border:1px solid var(--line)}
+a.btn.p{background:var(--sun);color:#000;border-color:var(--sun)}
 .seg{display:flex;background:var(--bg);border-radius:10px;padding:3px;margin-bottom:12px}
 .seg button{flex:1;background:none;color:var(--mut)}
 .seg button.on{background:var(--line);color:var(--txt)}
@@ -32,8 +34,18 @@ button{border:0;border-radius:10px;padding:10px 14px;background:var(--sun);color
 .day:last-child{border:0}
 .hr{display:grid;grid-template-columns:48px 28px 1fr 1fr 1fr;gap:6px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);align-items:center}
 .hr.h{color:var(--mut);font-size:11px}
+.store{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.store:last-child{border:0}
+.store b{font-size:15px}
+.badge{display:inline-block;border-radius:8px;padding:3px 8px;font-size:12px;font-weight:700;background:var(--line);color:var(--mut)}
+.badge.hit{background:var(--green);color:#000}
+.badge.off{background:var(--blue);color:#000}
+.item{border-bottom:1px solid var(--line);padding:12px 0}
+.item:last-child{border:0}
+.item .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.del{background:none;color:var(--mut);padding:2px 8px;font-size:18px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--line)}
-nav button{flex:1;background:none;color:var(--mut);padding:16px;border-radius:0}
+nav button{flex:1;background:none;color:var(--mut);padding:16px 4px;border-radius:0}
 nav button.on{color:var(--sun)}
 .hide{display:none}
 </style>
@@ -42,8 +54,8 @@ nav button.on{color:var(--sun)}
 <div class="wrap">
   <h1 id="title">☀️ Solar</h1>
 
-  <div class="card">
-    <label>Location</label>
+  <div class="card" id="locCard">
+    <label style="margin-top:0">Location</label>
     <div class="row">
       <input id="loc" placeholder="e.g. Sydney" value="Sydney">
       <button id="go" style="flex:0 0 auto">Go</button>
@@ -51,11 +63,12 @@ nav button.on{color:var(--sun)}
     <div class="mut" id="place" style="margin-top:6px"></div>
   </div>
 
+  <!-- SOLAR -->
   <div id="solar">
     <div class="card">
       <div class="row">
-        <div><label>Solar system (kW)</label><input id="kw" type="number" step="0.1" value="6.6"></div>
-        <div><label>Battery (kWh)</label><input id="batt" type="number" step="0.1" value="10"></div>
+        <div><label style="margin-top:0">Solar system (kW)</label><input id="kw" type="number" step="0.1" value="6.6"></div>
+        <div><label style="margin-top:0">Battery (kWh)</label><input id="batt" type="number" step="0.1" value="10"></div>
       </div>
     </div>
     <div class="seg">
@@ -66,14 +79,43 @@ nav button.on{color:var(--sun)}
     <div id="solarOut"></div>
   </div>
 
+  <!-- WEATHER -->
   <div id="weather" class="hide">
     <div id="wxOut"></div>
+  </div>
+
+  <!-- SALE MONITOR -->
+  <div id="sales" class="hide">
+    <div class="card">
+      <div class="mut">Stores</div>
+      <div id="stores"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600">Track an item</div>
+      <label>Store</label>
+      <select id="sStore"></select>
+      <label>Item</label>
+      <input id="sName" placeholder="e.g. Cordless drill">
+      <div class="row">
+        <div><label>Normal $</label><input id="sNormal" type="number" step="0.01" inputmode="decimal"></div>
+        <div><label>Target $</label><input id="sTarget" type="number" step="0.01" inputmode="decimal"></div>
+        <div><label>Now $</label><input id="sNow" type="number" step="0.01" inputmode="decimal"></div>
+      </div>
+      <label>Link (optional)</label>
+      <input id="sLink" placeholder="https://...">
+      <button id="sAdd" style="margin-top:12px;width:100%">Add to watchlist</button>
+    </div>
+    <div class="card">
+      <div class="mut">Watchlist</div>
+      <div id="watch"></div>
+    </div>
   </div>
 </div>
 
 <nav>
   <button id="navS" class="on">☀️ Solar</button>
   <button id="navW">🌦️ Weather</button>
+  <button id="navM">🏷️ Sales</button>
 </nav>
 
 <script>
@@ -81,7 +123,7 @@ const $ = id => document.getElementById(id);
 const PR = 0.8;
 let D = null, solarMode = 'day', solarDay = 0, wxDay = null;
 
-// ---- Save / restore last inputs ----
+/* ---------- Save / restore last inputs ---------- */
 function saveInputs() {
   try {
     localStorage.setItem('solarEstimater', JSON.stringify({
@@ -105,6 +147,7 @@ const dayName = (s,i) => i===0 ? 'Today' : new Date(s+'T12:00').toLocaleDateStri
 const dayLong = s => new Date(s+'T12:00').toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'short'});
 const hr = t => { const h=+t.slice(11,13); return (h%12||12)+(h<12?'am':'pm'); };
 
+/* ---------- Weather + Solar ---------- */
 async function load() {
   const q = $('loc').value.trim(); if(!q) return;
   $('place').textContent = 'Loading…';
@@ -195,10 +238,99 @@ function renderWx() {
 
 function render(){ renderSolar(); renderWx(); }
 function setMode(){ $('mDay').className=solarMode==='day'?'on':''; $('mWeek').className=solarMode==='week'?'on':''; renderSolar(); }
+
+/* ---------- Sale Monitor ---------- */
+const STORES = [
+  {n:'Bunnings',      e:'🔨', u:'https://www.bunnings.com.au'},
+  {n:'Aldi',          e:'🛒', u:'https://www.aldi.com.au'},
+  {n:'JB Hi-Fi',      e:'🎧', u:'https://www.jbhifi.com.au'},
+  {n:'Officeworks',   e:'🖇️', u:'https://www.officeworks.com.au'},
+  {n:'Harvey Norman', e:'🛋️', u:'https://www.harveynorman.com.au'},
+  {n:'The Good Guys', e:'📺', u:'https://www.thegoodguys.com.au'},
+  {n:'IKEA',          e:'🪑', u:'https://www.ikea.com/au/en/'}
+];
+const saleUrl = n => 'https://www.google.com/search?q=' + encodeURIComponent(n + ' Australia specials sale this week');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => '$' + (+n).toFixed(2);
+
+let items = [];
+function loadItems() { try { items = JSON.parse(localStorage.getItem('saleItems') || '[]'); } catch(e) { items = []; } }
+function saveItems() { try { localStorage.setItem('saleItems', JSON.stringify(items)); } catch(e) {} }
+
+function renderStores() {
+  $('stores').innerHTML = STORES.map(s => `<div class="store">
+    <b>${s.e} ${s.n}</b>
+    <div><a class="btn p" target="_blank" rel="noopener" href="${saleUrl(s.n)}">Sales</a>
+    <a class="btn" target="_blank" rel="noopener" href="${s.u}">Open</a></div></div>`).join('');
+  $('sStore').innerHTML = STORES.map(s => `<option>${s.n}</option>`).join('');
+}
+
+function status(it) {
+  const now = +it.now, normal = +it.normal, target = +it.target;
+  const off = (normal && now && now < normal) ? Math.round((1 - now/normal) * 100) : 0;
+  const hit = !!(now && target && now <= target);
+  return {off, hit};
+}
+
+function renderWatch() {
+  if(!items.length) { $('watch').innerHTML = '<div class="mut" style="padding:8px 0">No items yet. Add one above.</div>'; return; }
+  const sorted = [...items].sort((a,b) => (status(b).hit - status(a).hit) || (status(b).off - status(a).off));
+  $('watch').innerHTML = sorted.map(it => {
+    const s = status(it);
+    const badge = s.hit ? '<span class="badge hit">🔥 Hit target</span>'
+                : s.off ? `<span class="badge off">${s.off}% off</span>`
+                : '<span class="badge">No sale</span>';
+    const link = it.link ? `<a class="btn" target="_blank" rel="noopener" href="${esc(it.link)}">Open</a>` : '';
+    return `<div class="item">
+      <div class="top"><div><b>${esc(it.name)}</b><div class="mut">${esc(it.store)} · Normal ${it.normal?money(it.normal):'–'} · Target ${it.target?money(it.target):'–'}</div></div>
+      <button class="del" data-del="${it.id}">✕</button></div>
+      <div class="row" style="align-items:center;margin-top:8px">
+        <div style="flex:0 0 auto">${badge}</div>
+        <div><input class="upd" data-id="${it.id}" type="number" step="0.01" inputmode="decimal" placeholder="Now $" value="${it.now||''}"></div>
+        <div style="flex:0 0 auto">${link}</div>
+      </div>
+      ${it.upd ? `<div class="mut" style="margin-top:4px">Price updated ${esc(it.upd)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function addItem() {
+  const name = $('sName').value.trim();
+  if(!name) { $('sName').focus(); return; }
+  items.push({
+    id: Date.now(), store: $('sStore').value, name,
+    normal: $('sNormal').value, target: $('sTarget').value, now: $('sNow').value,
+    link: $('sLink').value.trim(),
+    upd: $('sNow').value ? new Date().toLocaleDateString() : ''
+  });
+  saveItems();
+  ['sName','sNormal','sTarget','sNow','sLink'].forEach(i => $(i).value = '');
+  renderWatch();
+}
+
+$('sAdd').onclick = addItem;
+$('watch').onclick = e => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if(id) { items = items.filter(i => i.id != id); saveItems(); renderWatch(); }
+};
+$('watch').onchange = e => {
+  if(e.target.classList.contains('upd')) {
+    const it = items.find(i => i.id == e.target.dataset.id);
+    if(it) { it.now = e.target.value; it.upd = new Date().toLocaleDateString(); saveItems(); renderWatch(); }
+  }
+};
+
+/* ---------- Navigation ---------- */
 function screen(s){
-  $('solar').className = s==='s'?'':'hide'; $('weather').className = s==='w'?'':'hide';
-  $('navS').className = s==='s'?'on':''; $('navW').className = s==='w'?'on':'';
-  $('title').textContent = s==='s'?'☀️ Solar':'🌦️ Weather';
+  $('solar').className   = s==='s' ? '' : 'hide';
+  $('weather').className = s==='w' ? '' : 'hide';
+  $('sales').className   = s==='m' ? '' : 'hide';
+  $('locCard').className = s==='m' ? 'hide' : 'card';
+  $('navS').className = s==='s' ? 'on' : '';
+  $('navW').className = s==='w' ? 'on' : '';
+  $('navM').className = s==='m' ? 'on' : '';
+  $('title').textContent = s==='s' ? '☀️ Solar' : s==='w' ? '🌦️ Weather' : '🏷️ Sale Monitor';
+  scrollTo(0,0);
 }
 
 $('go').onclick = load;
@@ -209,8 +341,12 @@ $('mDay').onclick = () => { solarMode='day'; setMode(); };
 $('mWeek').onclick = () => { solarMode='week'; setMode(); };
 $('navS').onclick = () => screen('s');
 $('navW').onclick = () => screen('w');
+$('navM').onclick = () => screen('m');
 
 restoreInputs();
+renderStores();
+loadItems();
+renderWatch();
 load();
 </script>
 </body>
