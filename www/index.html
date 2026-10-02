@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Estimater</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#f1f5f9;--mut:#94a3b8;--sun:#fbbf24;--blue:#38bdf8}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,sans-serif}
+body{background:var(--bg);color:var(--txt);padding-bottom:80px}
+.wrap{max-width:560px;margin:auto;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,24px))}
+h1{font-size:22px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:4px}
+input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-size:16px}
+.row{display:flex;gap:8px}.row>div{flex:1}
+button{border:0;border-radius:10px;padding:10px 14px;background:var(--sun);color:#000;font-weight:600;font-size:15px}
+.seg{display:flex;background:var(--bg);border-radius:10px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;background:none;color:var(--mut)}
+.seg button.on{background:var(--line);color:var(--txt)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px}
+.chip{flex:0 0 auto;background:var(--card);color:var(--txt);border:1px solid var(--line);font-weight:500;text-align:center;padding:8px 12px}
+.chip.on{background:var(--blue);color:#000;border-color:var(--blue)}
+.big{font-size:34px;font-weight:700}
+.mut{color:var(--mut);font-size:13px}
+.bar{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px}
+.bar .t{width:62px;color:var(--mut);flex:0 0 auto}
+.bar .track{flex:1;height:10px;background:var(--bg);border-radius:6px;overflow:hidden}
+.bar .fill{height:100%;background:var(--sun);border-radius:6px}
+.bar .v{width:64px;text-align:right;flex:0 0 auto}
+.day{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.day:last-child{border:0}
+.hr{display:grid;grid-template-columns:48px 28px 1fr 1fr 1fr;gap:6px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);align-items:center}
+.hr.h{color:var(--mut);font-size:11px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--line)}
+nav button{flex:1;background:none;color:var(--mut);padding:16px;border-radius:0}
+nav button.on{color:var(--sun)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">☀️ Solar</h1>
+
+  <div class="card">
+    <label>Location</label>
+    <div class="row">
+      <input id="loc" placeholder="e.g. Sydney" value="Sydney">
+      <button id="go" style="flex:0 0 auto">Go</button>
+    </div>
+    <div class="mut" id="place" style="margin-top:6px"></div>
+  </div>
+
+  <div id="solar">
+    <div class="card">
+      <div class="row">
+        <div><label>Solar system (kW)</label><input id="kw" type="number" step="0.1" value="6.6"></div>
+        <div><label>Battery (kWh)</label><input id="batt" type="number" step="0.1" value="10"></div>
+      </div>
+    </div>
+    <div class="seg">
+      <button id="mDay" class="on">Day</button>
+      <button id="mWeek">Week</button>
+    </div>
+    <div id="solarDays" class="chips"></div>
+    <div id="solarOut"></div>
+  </div>
+
+  <div id="weather" class="hide">
+    <div id="wxOut"></div>
+  </div>
+</div>
+
+<nav>
+  <button id="navS" class="on">☀️ Solar</button>
+  <button id="navW">🌦️ Weather</button>
+</nav>
+
+<script>
+const $ = id => document.getElementById(id);
+const PR = 0.8;
+let D = null, solarMode = 'day', solarDay = 0, wxDay = null;
+
+// ---- Save / restore last inputs ----
+function saveInputs() {
+  try {
+    localStorage.setItem('solarEstimater', JSON.stringify({
+      loc: $('loc').value.trim(), kw: $('kw').value, batt: $('batt').value
+    }));
+  } catch(e) {}
+}
+function restoreInputs() {
+  try {
+    const s = JSON.parse(localStorage.getItem('solarEstimater') || 'null');
+    if (s) {
+      if (s.loc) $('loc').value = s.loc;
+      if (s.kw !== undefined && s.kw !== '') $('kw').value = s.kw;
+      if (s.batt !== undefined && s.batt !== '') $('batt').value = s.batt;
+    }
+  } catch(e) {}
+}
+
+const icon = c => c===0?'☀️':c<=2?'🌤️':c==3?'☁️':c<=48?'🌫️':c<=57?'🌦️':c<=67?'🌧️':c<=77?'❄️':c<=82?'🌧️':c<=86?'🌨️':'⛈️';
+const dayName = (s,i) => i===0 ? 'Today' : new Date(s+'T12:00').toLocaleDateString(undefined,{weekday:'short'});
+const dayLong = s => new Date(s+'T12:00').toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'short'});
+const hr = t => { const h=+t.slice(11,13); return (h%12||12)+(h<12?'am':'pm'); };
+
+async function load() {
+  const q = $('loc').value.trim(); if(!q) return;
+  $('place').textContent = 'Loading…';
+  try {
+    const g = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name='+encodeURIComponent(q))).json();
+    if(!g.results) { $('place').textContent='Location not found'; return; }
+    const p = g.results[0];
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude='+p.latitude+'&longitude='+p.longitude+
+      '&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,cloud_cover,shortwave_radiation,weather_code'+
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max'+
+      '&timezone=auto&forecast_days=7';
+    D = await (await fetch(url)).json();
+    $('place').textContent = '📍 '+p.name+(p.admin1?', '+p.admin1:'')+', '+p.country;
+    saveInputs();
+    solarDay = 0; wxDay = null;
+    render();
+  } catch(e) { $('place').textContent = 'Could not load data. Check your connection.'; }
+}
+
+const idx = d => [...Array(24).keys()].map(h => d*24+h);
+const gen = i => (+$('kw').value||0) * (D.hourly.shortwave_radiation[i]/1000) * PR;
+const dayGen = d => idx(d).reduce((s,i)=>s+gen(i),0);
+
+function renderSolar() {
+  if(!D) return;
+  const days = D.daily.time;
+  $('solarDays').className = solarMode==='day' ? 'chips' : 'hide';
+  $('solarDays').innerHTML = days.map((s,i)=>`<button class="chip ${i===solarDay?'on':''}" data-i="${i}">${dayName(s,i)}</button>`).join('');
+  $('solarDays').querySelectorAll('button').forEach(b=>b.onclick=()=>{solarDay=+b.dataset.i;renderSolar()});
+  const batt = +$('batt').value||0;
+  let h = '';
+  if(solarMode==='day') {
+    const ids = idx(solarDay), vals = ids.map(gen), total = vals.reduce((a,b)=>a+b,0), max = Math.max(...vals,0.01);
+    const peak = vals.indexOf(Math.max(...vals));
+    const toBatt = Math.min(total,batt), surplus = Math.max(0,total-batt);
+    h += `<div class="card"><div class="mut">${dayLong(days[solarDay])}</div>
+      <div class="big">${total.toFixed(1)} kWh</div>
+      <div class="mut">Peak ${vals[peak].toFixed(2)} kWh at ${hr(D.hourly.time[ids[peak]])} · Cloud avg ${Math.round(ids.reduce((s,i)=>s+D.hourly.cloud_cover[i],0)/24)}%</div></div>
+      <div class="card"><div class="mut">Battery (${batt} kWh)</div>
+      <div class="bar"><div class="track"><div class="fill" style="width:${batt?toBatt/batt*100:0}%;background:var(--blue)"></div></div><div class="v">${batt?Math.round(toBatt/batt*100):0}%</div></div>
+      <div class="mut">Could fill ${toBatt.toFixed(1)} kWh · ${surplus.toFixed(1)} kWh left over for the home/grid</div></div>
+      <div class="card">`;
+    ids.forEach((i,k)=>{ if(vals[k]>0.005) h += `<div class="bar"><div class="t">${hr(D.hourly.time[i])}</div><div class="track"><div class="fill" style="width:${vals[k]/max*100}%"></div></div><div class="v">${vals[k].toFixed(2)}</div></div>`; });
+    h += `</div>`;
+  } else {
+    const tot = days.map((_,d)=>dayGen(d)), max = Math.max(...tot,0.01), sum = tot.reduce((a,b)=>a+b,0);
+    h += `<div class="card"><div class="mut">Next 7 days</div><div class="big">${sum.toFixed(1)} kWh</div>
+      <div class="mut">Avg ${(sum/7).toFixed(1)} kWh per day</div></div><div class="card">`;
+    tot.forEach((v,d)=>{ h += `<div class="bar" data-d="${d}"><div class="t">${dayName(days[d],d)}</div><div class="track"><div class="fill" style="width:${v/max*100}%"></div></div><div class="v">${v.toFixed(1)}</div></div>`; });
+    h += `</div><div class="mut" style="text-align:center">Tap a day to see its hourly breakdown</div>`;
+  }
+  $('solarOut').innerHTML = h;
+  $('solarOut').querySelectorAll('[data-d]').forEach(e=>e.onclick=()=>{solarMode='day';solarDay=+e.dataset.d;setMode()});
+}
+
+function renderWx() {
+  if(!D) return;
+  const d = D.daily, days = d.time;
+  let h = '';
+  if(wxDay===null) {
+    h += `<div class="card">`;
+    days.forEach((s,i)=>{
+      h += `<div class="day" data-d="${i}">
+        <div><b>${dayName(s,i)}</b><div class="mut">💧 ${d.precipitation_probability_max[i]}% · ${d.precipitation_sum[i]} mm · 💨 ${Math.round(d.wind_speed_10m_max[i])} km/h</div></div>
+        <div style="text-align:right;font-size:22px">${icon(d.weather_code[i])} <span style="font-size:15px">${Math.round(d.temperature_2m_max[i])}° <span class="mut">${Math.round(d.temperature_2m_min[i])}°</span></span></div></div>`;
+    });
+    h += `</div><div class="mut" style="text-align:center">Tap a day for the hourly breakdown</div>`;
+  } else {
+    const i0 = wxDay;
+    h += `<button class="chip" id="back" style="margin-bottom:12px">← Week</button>
+      <div class="card"><div class="mut">${dayLong(days[i0])}</div>
+      <div class="big">${icon(d.weather_code[i0])} ${Math.round(d.temperature_2m_max[i0])}°<span class="mut" style="font-size:20px"> / ${Math.round(d.temperature_2m_min[i0])}°</span></div>
+      <div class="mut">Rain chance ${d.precipitation_probability_max[i0]}% · ${d.precipitation_sum[i0]} mm total · Wind up to ${Math.round(d.wind_speed_10m_max[i0])} km/h</div></div>
+      <div class="card"><div class="hr h"><div>Time</div><div></div><div>Temp / Cloud</div><div>Rain</div><div>Wind / Gust</div></div>`;
+    idx(i0).forEach(i=>{
+      const H = D.hourly;
+      h += `<div class="hr"><div>${hr(H.time[i])}</div><div>${icon(H.weather_code[i])}</div>
+        <div>${Math.round(H.temperature_2m[i])}° <span class="mut">${H.cloud_cover[i]}%☁</span></div>
+        <div>${H.precipitation_probability[i]}% <span class="mut">${H.precipitation[i]}mm</span></div>
+        <div>${Math.round(H.wind_speed_10m[i])} <span class="mut">${Math.round(H.wind_gusts_10m[i])}</span></div></div>`;
+    });
+    h += `</div>`;
+  }
+  $('wxOut').innerHTML = h;
+  $('wxOut').querySelectorAll('[data-d]').forEach(e=>e.onclick=()=>{wxDay=+e.dataset.d;renderWx();scrollTo(0,0)});
+  if($('back')) $('back').onclick=()=>{wxDay=null;renderWx()};
+}
+
+function render(){ renderSolar(); renderWx(); }
+function setMode(){ $('mDay').className=solarMode==='day'?'on':''; $('mWeek').className=solarMode==='week'?'on':''; renderSolar(); }
+function screen(s){
+  $('solar').className = s==='s'?'':'hide'; $('weather').className = s==='w'?'':'hide';
+  $('navS').className = s==='s'?'on':''; $('navW').className = s==='w'?'on':'';
+  $('title').textContent = s==='s'?'☀️ Solar':'🌦️ Weather';
+}
+
+$('go').onclick = load;
+$('loc').onkeydown = e => { if(e.key==='Enter') load(); };
+$('loc').oninput = saveInputs;
+$('kw').oninput = $('batt').oninput = () => { saveInputs(); renderSolar(); };
+$('mDay').onclick = () => { solarMode='day'; setMode(); };
+$('mWeek').onclick = () => { solarMode='week'; setMode(); };
+$('navS').onclick = () => screen('s');
+$('navW').onclick = () => screen('w');
+
+restoreInputs();
+load();
+</script>
+</body>
+</html>
